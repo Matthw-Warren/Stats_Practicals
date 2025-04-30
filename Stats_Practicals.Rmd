@@ -1,0 +1,225 @@
+---
+title: "Stats Practicals"
+output: html_document
+date: "2025-04-21"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Stat Modelling course
+
+Going through the Statistical modelling course from Cam. Begin with:
+
+## Linear Models
+
+Classic is to use the ordinary least squares estimators. We have the model 
+$$
+Y = X\beta + \varepsilon
+$$
+where $Y$ is a our vector of dependent outcomes, $X$ is the design matrix, $\beta$ the vector of predictors. We have the common assumptions
+- $\mathbb{E}(\varepsilon) =0$
+- $\text{Var}(\varepsilon) = \sigma^2I$
+
+We may also include a column of $1$'s in the design matrix if we wish to have an intercept, moreover the design matrix can take functions of $x_ij$ as elements - the model is linear in $\beta$.
+
+
+Anyhoo - I'm not here to re-write the notes out. I'm doing the practicals.
+
+Question 1
+
+```{r P1_Q1}
+N <- 100000000
+z <- rnorm(N)
+
+b =exp_given_geq1 <- mean(z[z>=1])
+print(exp_given_geq1)
+
+sixth_moment = mean(z^6)
+print(sixth_moment)
+
+
+```
+
+
+Question 2
+
+```{r P1_Q2}
+
+out <- qchisq(0.05, 6, FALSE)
+print(out)
+
+```
+Question 3
+```{r P1_Q3}
+M <- matrix(c(3,4,-2,1,2,-1,7,-2,6,2,-1,1,1,6,-2,5), 4,4, byrow = TRUE)
+#print(M)
+b = c(9,13,11,27)
+
+x <- solve(M,b)
+print(x)
+```
+
+
+Cool, that all seemed to go smoothly. Next, onto the next!!
+
+This is concerned with writing functions in R.Consider 
+
+```{r P2_Examples}
+f <- function (x,y){
+  z <- x^2 + y^2
+  return(c(cos(z), sin(z)))
+}
+
+print(f(1,1))
+
+
+```
+
+Cool, and we note that we can use scripts via the 'source' keyword in the console.
+
+Next goal is to write a piece of R to simulate t-statistics from a linear model. Recall that 
+$$
+\frac{\hat{\beta}_i - \beta}{ \sqrt{\hat{\sigma^2} (X^TX)^{-1}_{ii}} }
+$$
+has has the t distribution when we scale by some amount depending on $n$ and $p$. (Indeed, the MLE of $\sigma^2$ is proportional to a $\chi^2_{n-p}$ RV).
+
+Cool, so our function will take in the design matrix $X$, a vector of coeffs $\beta$ and a function for generating the errors (why not just generate some normal and chi squared random variables. )
+
+
+Right, I'll write the function in a different script to see if I can call it within RMD
+
+
+```{r importtest}
+source('~/Docs/Stats_progamming/Lin_mod_sim.R')
+#Okay - lets consider a case where $n=50$ and $p=2$
+n<-50
+p<-2
+X <- matrix(rnorm(n*p),n,p)
+
+#Then we can pass this to our function and see what happens (note that it will use the predetermined values of beta, rand and B.
+#In particular the initialised value of $beta$ is just $(0,0)$.
+
+t_mat <- LinMod_sim(X)
+
+
+
+```
+
+
+Okay, so we've produced a number of t-distributed instances - perhaps we'd like to plot these to get an idea of the distribution of $t_{n-p}$. 
+Ok - one way to check the correctness of our distribution (seeing as R has an inbuilt t distrib) is using QQ plots.
+
+To do so - we sort the statistics we've calculated in order, then plot them against the relevant quartiles! - we should expect an approximately straight line.
+
+Note that we're interested in a two sided t test (think - null being blah, alt being blah) and so it makes sense to look at the square of the t statistic. This is distrib $F_{1,d}$ where $d$ is the df of the t-distrib in quesiton.
+
+```{r QQplot}
+source('~/Docs/Stats_progamming/Lin_mod_sim.R')
+perc <- qqplot_F((t_mat)^2,1,n-p)
+print(perc)
+```
+Okay, nice!
+
+Let's try some different variations of N, p, and the random-distrib of our errors.
+
+Note that we should expect that changing our random errors from a normal distribution will mean that our statistic isn't necessarily still t-distributed. Perhaps for large $n$ there will be some CLT activity going on though that brings this back around
+
+```{r testing_different_cases}
+source('~/Docs/Stats_progamming/Lin_mod_sim.R')
+n<-100
+p<-2
+rand_gen <- rcauchy
+X <- matrix(rnorm(n*p),n,p)
+
+out2 <- LinMod_sim(X, errors_gen =rand_gen)
+qqplot_F(out2^2, 1, n-p)
+
+n<-100
+p<-10
+rand_gen <- rcauchy
+#Note to self that cauchy distrib doesn't have a mean.
+X <- matrix(rnorm(n*p),n,p)
+
+out2 <- LinMod_sim(X, errors_gen =rand_gen)
+qqplot_F(out2^2, 1, n-p)
+
+n<-100
+p<-2
+rand_gen <- function(x) rexp(x)-1
+out3 <- LinMod_sim(X,errors_gen = rand_gen)
+qqplot_F(out3^2, 1, n-p)
+
+n<- 100
+p<-2
+rand_gen <- function(N) rgamma(N,shape =1/2, rate = 1/2) - 1
+#Again we subtract off the 1 so that the mean is zero
+out3 <-LinMod_sim(X,errors_gen = rand_gen)
+qqplot_F(out2^4, 1, n-p)
+
+```
+
+Okay dokey, last thing is lists.
+
+Allows us to make lists of items with different types.
+
+```{r list}
+empl <- list(employee = 'Ernie', spouse = "Adam", children = 2, child_ages = c(1,2))
+
+print(empl)
+
+#THen use $ to access with keys
+
+empl[2]
+empl$employee
+```
+
+Exercises
+
+Q1: I mean - I suppose this changes quite a lot! Eg. we should no longer have an estimator $\hat{\sigma^2}$ as a scalar but rather a vector of length $n$. How should this be estimated? - intuitively we should just take the $i$th component to be $Y_i - \hat{Y}_i$ (eg. lets look at the MLE)
+
+We have now that the error matrix epsilon is distributed MVN with variance being a diagonal matrix $D$, therefore the density function of $Y$ is given by 
+$$
+f(y) = \frac{1}{(2\pi)^{n/2} \det(D)^{1/2}} \exp(- \frac{1}{2} (y-X\beta)^T D^{-1}(y-X\beta))
+$$
+The MLEs are then $\hat\beta = (X^TX)^{-1}X^TY$ and by using that D is diagonal, we have simply that the estimate for the $i$th variance is $(y_i - (X\beta)_i)^2$.
+
+```{r P2_Q1}
+#Have made the modification in LinModSim file 
+source('~/Docs/Stats_progamming/Lin_mod_sim.R')
+
+set.seed(1)
+
+n<-100
+p<-2
+X <- matrix(rnorm(n*p),n,p)
+
+t_different_variances <- LinMod_sim_modified(X)
+qqplot_F(t_different_variances^2, 1, n-p)
+
+
+
+```
+
+
+So the data lies below the diagonal. Here is an exerpt from the notes:
+
+Note that if the points on the Q–Q plot lie above the diagonal it suggests that the usual t-test with nominal level α will have a size greater than α (why?). On the other hand, if the points lie below the diagonal, the t-test will be conservative and have size less than α.
+
+Ok - so we're using the T-test to get an interval for the parameter $\beta_j$ some $j$. 
+Note that a non-normal linear model - the t test wont be valid tho??
+
+Anyway, if the data points lie below the diagonal - then this tells us something about how the actual distrib of our data (ie. the one we've set for the random errors) compares to the f-stat (ie f because we've taken t^2).
+
+Since it's below the line, the actual quantiles tend to be smaller than the predicted quantiles - meaning that the data has lower variance essentially (ie. less probaility in the tail.)
+
+Ok. Will look into this post ex 2
+
+Exercise 2
+
+
+Again, done in the script. 
+
+
+
