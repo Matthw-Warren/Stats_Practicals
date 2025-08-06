@@ -1,6 +1,8 @@
 ---
 title: "Stats Practicals"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 date: "2025-04-21"
 ---
 
@@ -92,7 +94,7 @@ Right, I'll write the function in a different script to see if I can call it wit
 
 
 ```{r importtest}
-source('~/Docs/Stats_progamming/Lin_mod_sim.R')
+source('~/Docs/Stats_practicals/Lin_mod_sim.R')
 #Okay - lets consider a case where $n=50$ and $p=2$
 n<-50
 p<-2
@@ -116,7 +118,7 @@ To do so - we sort the statistics we've calculated in order, then plot them agai
 Note that we're interested in a two sided t test (think - null being blah, alt being blah) and so it makes sense to look at the square of the t statistic. This is distrib $F_{1,d}$ where $d$ is the df of the t-distrib in quesiton.
 
 ```{r QQplot}
-source('~/Docs/Stats_progamming/Lin_mod_sim.R')
+source('~/Docs/Stats_practicals/Lin_mod_sim.R')
 perc <- qqplot_F((t_mat)^2,1,n-p)
 print(perc)
 ```
@@ -127,7 +129,7 @@ Let's try some different variations of N, p, and the random-distrib of our error
 Note that we should expect that changing our random errors from a normal distribution will mean that our statistic isn't necessarily still t-distributed. Perhaps for large $n$ there will be some CLT activity going on though that brings this back around
 
 ```{r testing_different_cases}
-source('~/Docs/Stats_progamming/Lin_mod_sim.R')
+source('~/Docs/Stats_practicals/Lin_mod_sim.R')
 n<-100
 p<-2
 rand_gen <- rcauchy
@@ -187,7 +189,7 @@ The MLEs are then $\hat\beta = (X^TX)^{-1}X^TY$ and by using that D is diagonal,
 
 ```{r P2_Q1}
 #Have made the modification in LinModSim file 
-source('~/Docs/Stats_progamming/Lin_mod_sim.R')
+#source('~/Docs/Stats_progamming/Lin_mod_sim.R')
 
 set.seed(1)
 
@@ -205,7 +207,7 @@ qqplot_F(t_different_variances^2, 1, n-p)
 
 So the data lies below the diagonal. Here is an exerpt from the notes:
 
-Note that if the points on the Q–Q plot lie above the diagonal it suggests that the usual t-test with nominal level α will have a size greater than α (why?). On the other hand, if the points lie below the diagonal, the t-test will be conservative and have size less than α.
+Note that if the points on the Q–Q plot lie above the diagonal it suggests that the usual t-test with nominal level $\alpha$ will have a size greater than $\alpha$ (why?). On the other hand, if the points lie below the diagonal, the t-test will be conservative and have size less than $\alpha$.
 
 Ok - so we're using the T-test to get an interval for the parameter $\beta_j$ some $j$. 
 Note that a non-normal linear model - the t test wont be valid tho??
@@ -220,6 +222,514 @@ Exercise 2
 
 
 Again, done in the script. 
+
+```{r Exsheet2Q5}
+
+library(MASS)
+?hills
+
+
+Data <- hills
+
+print(pairs(Data))
+
+print(Data[(Data$time >50) & (Data$dist<10),])
+
+#Knock Hill seems to be the outlier - we want to replace the time value by subtracting off an hour.
+
+#How to do so.
+
+
+rownames = rownames(Data)
+index = which(rownames == 'Knock Hill')
+#print(typeof(index))
+
+Data[index, 3] <- Data[index,3] -60
+
+
+print(Data[(Data$time >50) & (Data$dist<10),])
+
+```
+Cool, so we got rid of the outlier. Question to self, what other good ways are there to remove outliers?
+
+OK - lets try and do some linear regression with this data.
+
+Model 1: Lets treat Time as the dependent variable, and distance and climb as the indep variables. I dont feel like there needs to be an intercept here. There shouldnt really be a kinda min benchmark time (if both distance and climb are zero, then time is also 0)
+
+
+Model 2: We could try and consider something more complicated (eg quadratic in, say the climb), or we could try and do regression in another direction. Here we dont want to overfit though!
+
+Model 3: Take logs! This is a reasonable idea if we suspect that the data is not linear - as if we have some proportionality to powers this will linearise the situation.
+
+However we would need to include an intercept. If we are considering 
+
+$\log(t_i) = \alpha_i + \beta_1 \log(d_i)+ \beta_2 \log(c_i) + \varepsilon_i$
+
+Then for $d=1$ and $c=1$ we would not necessarily expect $t=1$ also (which is what zero intercept would imply).
+
+In the non-logged case, we indeed have no intercept because $d=c=0$ does imply we should expect $t=0$
+
+
+```{r Linear Models}
+
+attach(Data)
+
+Correlation <- cor(Data)
+print(Correlation)
+
+LinearModel1 = lm(time ~ 0 + dist + climb^2 )
+summary(LinearModel1)
+
+LinearModel2 = lm(log(time) ~ log(dist) + log(climb) )
+summary(LinearModel2)
+
+
+LinearModel3 = lm(time ~ 0+ dist)
+summary(LinearModel3)
+
+
+detach(Data)
+
+
+#Ok - I like the first model the best
+
+
+```
+Yep, I like the look of the first model the best. So lets make a prediction with this -> assuming that the model is correct (ie. that T = beta_0 Dist + beta_1 Climb^2 + epsilon)
+
+We make a new observation: Dist = 5.3 Miles, and Climb = 1100 ft. 
+
+Hence T  = blah + eps, where blah is now a number. We can estimate T using our predictions for the values of beta, then get a confidence interval for it (which will be a t-test!)
+
+In R this is as follows:
+
+```{r ci}
+newdata <- data.frame('dist' = 5.3, 'climb'=1100)
+
+predict(LinearModel1, newdata,  interval='confidence', level=0.95 )
+```
+
+
+### Question 9, Es 3
+
+```{r Q9s3}
+library(MASS)
+attach(mammals)
+
+plot(log(mammals))
+
+
+index = which(rownames(mammals) == 'Human')
+
+
+LinModel = lm(log(brain) ~ log(body)) #Note have included an intercept for same reason as above.
+
+summary(LinModel)
+plot(LinModel)
+tval <- rstudent(LinModel)[index]
+n <- length(brain)
+p=2 #Have intercept and log(body)
+
+
+print(pt(tval,n-p-1 ))
+
+detach(mammals)
+```
+A one sided test is appropriate if we think that humans are cracked - ie if the alt hypoth is that our brains are larger than they should be!
+
+
+
+
+Ok onto the third sheet. 
+
+
+
+```{r SHeet 3}
+
+library(MASS)
+attach(cabbages)
+
+#So want to kinda do ANOVA on this!
+
+
+model = lm(HeadWt ~ Date)
+
+summary(model)
+
+model2 = lm(log(HeadWt) ~ Date)
+
+summary((model2))
+detach(cabbages)
+
+```
+
+
+
+# Sheet 4
+Question 3
+
+```{r ES4Q3}
+n <- c(9,10,15,25,32,33,37,46,46)
+i <- 1:9
+
+model <- glm(n ~ i , family = poisson(link = 'log'))
+
+summary(model
+        )
+
+
+```
+
+
+
+Question 8
+
+```{r Es4Q8}
+
+M = matrix(c(1,0,-1,1) ,2 )
+S = matrix(c(0.6784^2, 0.59*0.7871*0.6784, 0.59*0.7871*0.6784, 0.7871^2 ),2)
+
+
+sd = (M%*%S%*%t(M))[1,1]
+
+zscore = (1.9328-1.5331)/sd
+
+```
+
+
+
+
+
+# Practical 5: ANOVA and ANCOVA
+```{r downloading}
+file_path <- "http://www.statslab.cam.ac.uk/~rds37/teaching/statistical_modelling/"
+EssayMarks <- read.csv(paste0(file_path, "EssayMarks.csv"))
+
+
+
+fdata <- factor(c(1,2,3,4,3,2))
+
+levels(fdata) <- c("Fisher", "Bayes", "Neyman", "Pearson")
+
+
+attach(EssayMarks)
+Quality <- factor(Quality)
+Photo <- factor(Photo)
+
+Photo <-  relevel(Photo, 'Control')
+levels(Photo)
+
+#Yep, just doing this as we do corner point constraint on control (which makes the most sense) rather than on one of the others. 
+
+plot(Mark~ Quality)
+plot(Mark~ Photo)
+```
+
+So there seems to do something going on, and we want to do some hyptohesis testing to see whether there is indeed. (ie. want to test the null, that there is no effect (ie. Alpha = 0), agains the alt that there is an effect)
+
+So, we have 2 differenct types of category, with 2,3 cats within them.
+
+Therefore we want to model the data $Y_{ijk}$, where this is the $k$th student (of 10) in the group given essay of qual type $i$ and photo type $j$.
+
+Our Linear Model's are then as follows
+
+
+\begin{align}
+Y_{ijk} &= \mu + \alpha_i + \varepsilon_{ijk}\\
+Y_{ijk} &= \mu + \alpha_i + \beta_j + \varepsilon_{ijk}\\
+Y_{ijk} &= \mu + \alpha_i + \beta_j +  \gamma_{ij} + \varepsilon_{ijk}
+\end{align}
+
+
+And we impose some corner point constraints, ie. alpha_1, beta_1, and gamma_{1j} gamma_{i1} are all 0.
+
+So the first model is where the beta and gamma are taken to be zero - we can do F-test (ie. ANOVA) against the models where they are not zero to test if they are significant enough to say they're nonzero.
+
+
+
+First, why have we included an intercept? This comes with the fact that we're using the corner point constraint. 
+
+In the first model, the intercept is the mean quality when i =0 (ie, the essay is 'good').
+In the second model and third, the intercept is the mean qual when i=j=0 (ie. essay good, control photo.)
+
+
+The third model has these interaction terms between the types of categories. This captures dependence between them.
+
+For example: perhaps it is the case that when the text is good *and* the photo is attractive, there is more of a change in perception than if the text is bad and the photo is attractive - there could be some dependence between the two types of category. 
+
+
+```{r fitting models}
+EssayMarksLM1 <- lm(Mark ~ Quality)
+EssayMarksLM2 <- lm(Mark ~ Quality + Photo)
+EssayMarksLM3 <- lm(Mark ~ Quality*Photo)
+
+summary(EssayMarksLM1)
+summary(EssayMarksLM2)
+summary(EssayMarksLM3)
+```
+```{r anova}
+anova(EssayMarksLM1, EssayMarksLM2)
+
+interaction.plot(Photo,Quality, Mark)
+interaction.plot(Quality, Photo, Mark)
+interaction.plot(Photo, Quality, fitted.values(EssayMarksLM2))
+interaction.plot(Quality, Photo, fitted.values(EssayMarksLM2))
+
+ anova(EssayMarksLM2, EssayMarksLM3)
+```
+
+```{r grouping}
+Photo_grp <- Photo
+levels(Photo_grp) <- c( "Control+Attr", "Control+Atrr", "Unattractive")
+
+EssayMarksLM4 <- lm(Mark ~ Quality*Photo_grp)
+EssayMarksLM5 <- lm(Mark ~ Quality + Photo + Quality:Photo_grp)
+
+AIC(EssayMarksLM1, EssayMarksLM2, EssayMarksLM3, EssayMarksLM4, EssayMarksLM5)
+
+```
+
+
+## Binomial Regression
+
+Here we look at doing logistic regression.
+
+```{r prac6.1}
+file_path <- "http://www.statslab.cam.ac.uk/~rds37/teaching/statistical_modelling/"
+Myopia <- read.csv(paste0(file_path, "Myopia.csv"))
+Myopia[1:3, ]
+attach(Myopia)
+```
+
+
+```{r prac6.2}
+MyopiaLogReg1 <- glm(myopic ~ ., data = Myopia, family = binomial)
+summary(MyopiaLogReg1)
+
+MyopiaLogReg0 <- glm(myopic ~ 1, family = binomial)
+anova(MyopiaLogReg0, MyopiaLogReg1, test = "LR")
+MyopiaLogReg2 <- glm(myopic ~ . + mumMyopic:dadMyopic, data = Myopia, family = binomial)
+summary(MyopiaLogReg2)
+```
+
+Note to self, the fact that we're doing LR tests here (apporx) and not F-tests is becasue F tests are quite specific to the case where we have a normal LM!!!!
+
+Think about what an F test is, is actually just a LR test for the normal Linear model, but is exact because things are so nice!
+
+```{r prac6.3}
+#Anova for the two models using LR (and Wilks)
+anova(MyopiaLogReg1, MyopiaLogReg2, test="LR")
+
+
+#Q2
+
+MyopiaLogReg3 <- glm(myopic~ .-compHR - TVHR, data = Myopia, family=binomial)
+
+#Then we test the null that they're not signif against them being signif (ie. MyopiaLogReg1)
+
+anova(MyopiaLogReg3, MyopiaLogReg1, test = 'LR')
+
+#The test is not significant - hence we cant conclude that they are collectively significant.
+
+#Q3
+#Want to test whether dad and mum myopic are the same. 
+
+mumORdadMyopic <- (dadMyopic == 'Yes') | (mumMyopic == 'Yes')
+mumORdadMyopic <- factor(mumORdadMyopic, labels = c("No", "Yes"))
+
+
+MyopiaLogReg4 = glm(myopic ~ . - mumMyopic + mumORdadMyopic, data = Myopia, family = binomial)
+AIC(MyopiaLogReg1, MyopiaLogReg4)
+
+```
+
+
+Second part of the practical.
+
+```{r prac6.2.1}
+Smoking <- read.csv(paste(file_path, "Smoking.csv", sep =""))
+attach(Smoking)
+
+Smoker <- factor(Smoker)
+total <- Survived + Died
+#I suppose we're doing binomial regression here, this time will be with n_i not all equal to one, and we're looking at survival rates
+
+propDied <- Died/total
+plot( propDied[Smoker == 'Yes'] ~ Age.group[Smoker  == 'Yes'])
+points(propDied[Smoker == "No"] ~ Age.group[Smoker == "No"], pch = 4)
+
+
+logit <- function(p) log(p/(1-p))
+plot(logit(propDied)[Smoker =="Yes"] ~ Age.group[Smoker == "Yes"])
+points(logit(propDied)[Smoker == "No"] ~ Age.group[Smoker == "No"], pch = 4)
+
+
+
+```
+
+```{r prac6.2.2.}
+
+SmokingLogReg1 <- glm(propDied ~ Age.group + Smoker, family = binomial, weights = total)
+
+summary(SmokingLogReg1)
+
+SmokingLogReg2 <- glm(propDied ~ Age.group + I(Age.group^2) + Smoker, family =  binomial , weights = total)
+SmokingLogReg3 <- glm(propDied ~ factor(Age.group) + Smoker, family = binomial, weights = total)
+
+SmokingLogReg4 <- glm(propDied ~ Age.group + Smoker, family = binomial(link=probit), weights = total)
+SmokingLogReg5 <- glm(propDied ~ Age.group + Smoker, family = binomial(link=cloglog), weights = total)
+
+
+summary(SmokingLogReg2)
+summary(SmokingLogReg3)
+summary(SmokingLogReg4)
+summary(SmokingLogReg5)
+
+
+```
+
+
+
+## Prac 7 Bin and Poi
+
+Let's first try and do some plotting!
+
+```{r prac7.1}
+
+newdata <- data.frame("Age.group" = rep(21:80, times =2), "Smoker" = gl(2,60, labels = levels(Smoker)))
+
+
+PredProp <- predict(SmokingLogReg2, newdata, type = "response")
+
+
+plot(propDied[Smoker == "Yes"] ~ Age.group[Smoker == "Yes"], xlab = "Age group", ylab = "Proportion died", col = "red")
+points(propDied[Smoker == "No"] ~ Age.group[Smoker == "No"], pch = 4)
+lines(21:80, PredProp[1:60], xlab = "Age", ylab = "Prob of dying", type = "l")
+lines(21:80, PredProp[61:120], col = "red")
+#Yes is red.
+
+```
+
+
+
+We want to include some kinda pointwise confidence bands!
+
+```{r prac7.2}
+
+PredLin <- predict(SmokingLogReg2, newdata, se.fit = TRUE, type = "link")
+str(PredLin)
+
+invlogit <- function(x) exp(x) /(1 + exp(x) )
+
+plot(propDied[Smoker == "Yes"] ~ Age.group[Smoker == "Yes"], xlab = "Age group", ylab = "Proportion died", col = "red")
+points(propDied[Smoker == "No"] ~ Age.group[Smoker == "No"], pch = 4)
+lines(21:80, PredProp[1:60], xlab = "Age", ylab = "Prob of dying", type = "l")
+lines(21:80, PredProp[61:120], col = "red")
+lines(21:80, invlogit(PredLin$fit[1:60] + 1.96 * PredLin$se.fit[1:60]), lty = 2)
+lines(21:80, invlogit(PredLin$fit[1:60] - 1.96 * PredLin$se.fit[1:60]), lty = 2)
+lines(21:80, invlogit(PredLin$fit[61:120] + 1.96 * PredLin$se.fit[61:120]), lty = 2, col = "red")
+lines(21:80, invlogit(PredLin$fit[61:120] - 1.96 * PredLin$se.fit[61:120]), lty = 2, col = "red")
+detach(Smoking)
+
+```
+
+
+## Poisson Regression
+
+Let's first download the data
+
+```{r prac7.3}
+
+
+football2014 <- read.csv(paste0(file_path, "football2014.csv"))
+
+
+attach(football2014)
+
+By <- factor(By)
+Against <- factor(Against)
+HomeAway <- factor(HomeAway)
+
+By <- relevel(By, "Man United")
+Against <- relevel(Against, "Man United")
+
+LogLinMod <- glm(GoalsScored ~ HomeAway + By + Against, family = poisson)
+summary(LogLinMod)
+
+attack_strength <- exp(sort(coef(LogLinMod)[3:21], decreasing =TRUE ))
+barplot(rev(attack_strength), las=2, horiz=TRUE, cex.names = 0.75)
+
+detach(football2014)
+```
+
+
+
+```{r prac 7.4}
+fixtures_remaining <- read.csv(paste0(file_path, "fixtures_remaining.csv"))
+#Okay- we're predicting the goals scored for and against in each game, can then use this to predict all results! (Could we do this autoregressively - well, not really since we dont know if our prediction will be correct.)
+
+Pred <- predict(LogLinMod, newdata=fixtures_remaining, type="response")
+#cbind(fixtures_remaining, Pred)
+
+B <- 1000
+n_rem_fix <- length(Pred)/2
+
+#We create an empty matrix to store simulation results
+sim_points <- matrix(nrow=2*n_rem_fix, ncol=B) #Ie. each column is a different  simulation - then we will aggregate.
+
+
+for (b in 1:B){
+  sim_score_diff <- rpois(n=n_rem_fix, lambda=Pred[1:n_rem_fix]) -
+    rpois(n=n_rem_fix, lambda=Pred[(n_rem_fix+1):(2*n_rem_fix)])
+  #This calculates the scores in the matches
+  
+  #Then we assign scores to the winners/losers/draws
+  points_scored <- 2*sign(sim_score_diff) #2,-2 or 0 dep on whats happened.
+  points_scored <- c(pmax(points_scored+1, 0), pmax(1-points_scored, 0))
+  sim_points[, b] <- points_scored
+}
+
+sim_table <- aggregate(sim_points, by= list(fixtures_remaining$By), FUN= sum)
+#sim_table[,1:10]
+
+#This bit just makes sim_table into a list of the same format that the rest of the season's data will be recorded in! 
+rownames(sim_table) <- sim_table[,1]
+sim_table <-sim_table[,-1]
+
+
+table_cur <- read.csv(paste0(file_path, "table_cur.csv"))
+sim_table <- sim_table + table_cur[, 2]
+
+sim_table[,1:10]
+
+set.seed(1)
+
+sim_ranks <- apply(-sim_table, 2, function(x) rank(x, ties.method="random"))
+final_standings <- apply(sim_ranks, 1, function(x) tabulate(x, 20)) / B
+heatmap(t(final_standings), Rowv = NA, Colv=NA)
+
+```
+#Prac 8: Contingency Tables
+
+```{r prac8.1}
+file_path <- "http://www.statslab.cam.ac.uk/~rds37/teaching/statistical_modelling/"
+SD_data <- read.csv(paste0(file_path, "SD_match.csv"), stringsAsFactors = FALSE)
+SD_data[1:3, ]
+
+typeof(SD_data$subject_m)
+
+
+SD_subj <- table(SD_data[, c("match", "subject_m", "subject_f")])
+#SD_subj
+xtabs(Freq ~ subject_m + subject_f + match, data=SD_subj)
+```
+
+```{r prac8.2}
+
+levels(SD_subj$subject_m)
+levels(SD_subj$subject_m) <- c("Arts+Humanities", "Econ+Law", "Econ+Law", "Sciences")
+levels(SD_subj$subject_f) <- c("Arts+Humanities", "Econ+Law", "Econ+Law", "Sciences")
+```
 
 
 
